@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Random Word Reader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            position: relative;
+        }
+        .tts-toggle-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            background-color: #6c757d;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 20;
+        }
+        .tts-toggle-btn.quick {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .tts-toggle-btn.muted {
+            background-color: #dc3545;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            min-width: 380px;
+        }
+        .controls-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #444;
+            gap: 14px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            gap: 10px;
+        }
+        .checkbox-row {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            font-size: 15px;
+            color: #555;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+            margin-top: 2px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+        .checkbox-item input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+        .special-attack-row {
+            font-size: 20px;
+            color: #007bff;
+            border: 2px dashed #007bff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            background-color: #f8fafd;
+            width: 80%;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .results-box {
+            text-align: left;
+            margin-top: 20px;
+            font-size: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .rolls-list {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+        .count-item {
+            font-weight: bold;
+        }
+        .total-display {
+            margin-top: 15px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #28a745;
+            border-top: 2px solid #eee;
+            padding-top: 10px;
+            line-height: 1.4;
+        }
+        #start-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(240, 242, 245, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        #start-overlay button {
+            padding: 20px 40px;
+            font-size: 24px;
+            background-color: #28a745;
+        }
+        #start-overlay button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+<button id="tts-toggle" class="tts-toggle-btn" onclick="toggleTTS()">Speech: ON</button>
+<div id="start-overlay">
+    <button onclick="initApp()">Start App</button>
+</div>
+
+<div class="container">
+    <!-- Styled App Title Header -->
+    <h1 style="font-size: 24px; color: #333; margin-top: 0; margin-bottom: 24px; border-bottom: 2px solid #f0f2f5; padding-bottom: 12px;">
+        The Crystal Sphere: Dice Roller
+    </h1>
+
+    <div class="controls-display">
+        <div class="stats-row">
+            <div>Rank: <span id="rank-val">1</span></div>
+            <div>Dice: <span id="dice-val">6</span></div>
+            <div>Bonus: <span id="bonus-val">0</span></div>
+            <!-- New Crit Count Metric Container -->
+            <div>Crit Count: <span id="crit-count-val">2</span></div>
+        </div>
+        
+        <!-- Checkbox Row Container Component -->
+ <div class="checkbox-row">
+            <label class="checkbox-item">
+                <input type="checkbox" id="chk-prof"> Proficiency
+            </label>
+            <label class="checkbox-item">
+                <input type="checkbox" id="chk-extra"> Extra Training
+            </label>
+            <label class="checkbox-item">
+                <input type="checkbox" id="chk-mastery"> Mastery
+            </label>
+            <!-- New HTML checkbox line item -->
+            <label class="checkbox-item">
+                <input type="checkbox" id="chk-resilience"> Resilience
+            </label>
+        </div>
+
+        <div class="special-attack-row">
+         <span id="attack-val">Standard Roll</span>
+        </div>
+    </div>
+
+    <button onclick="rollDice()">Roll</button>
+    <div id="rolls-display" class="rolls-list"></div>
+    <div id="counts-display" class="results-box"></div>
+</div>
+
+<script>
+    const words = ['Crit', 'Hit', 'Hit', 'Skill', 'Skill', 'Skill', 'Weird', 'Blank'];
+    const specialAttacks = ["Standard Roll", "Calculated Strike", "Crushing Blow", "Backstab", "Disadvantage", "Advantage"];
+
+    let attackIndex = 0;
+    let rank = 1;
+    let diceCount = 6;
+    let bonus = 0;
+    let critCount = 2; 
+    let appReady = false;
+
+    let spacePressed = false;
+    let spaceTimer = null;
+    let isHoldAction = false;
+    let lastSpokenText = ""; 
+
+    // Expanded welcome speech sequence with checkbox key maps listed
+    const instructionsText = "press the up and down arrows to adjust the number of dice you are rolling, press the left and right arrows to set your bonus, press Control up or control down to set your rank, press control left or control right to choose your attack type, and Press a, s, d, or f to toggle proficiency, extra training, mastery, and resiliance, and press c and v to lower or raise your crit count. Press space to roll. Press and hold space to repeat audio.";
+    
+    // Three-state loop manager: 0 = ON, 1 = Quick Talk, 2 = OFF
+    let ttsMode = 0; 
+
+    function toggleTTS() {
+        ttsMode = (ttsMode + 1) % 3;
+        const btn = document.getElementById('tts-toggle');
+        
+        if (ttsMode === 0) {
+            btn.innerText = "Speech: ON";
+            btn.className = "tts-toggle-btn";
+            speakText("Speech fully activated");
+        } else if (ttsMode === 1) {
+            btn.innerText = "Speech: Quick Talk";
+            btn.className = "tts-toggle-btn quick";
+            speakText("Quick talk enabled");
+        } else if (ttsMode === 2) {
+            btn.innerText = "Speech: OFF";
+            btn.className = "tts-toggle-btn muted";
+            
+            // --- NEW: VOICE "SPEECH OFF" BEFORE CLOSING DISPATCH RUN ENGINE ---
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel(); // Clear previous tracks
+                const utterance = new SpeechSynthesisUtterance("speech off");
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    }
+
+    // Core text engine interceptor 
+    function speakText(text) {
+        if (!window.speechSynthesis) return;
+        lastSpokenText = text; 
+        window.speechSynthesis.cancel();
+        
+        // --- BLOCKS STANDARD DISPATCH ROUTINES IF TOTAL OFF IS ACTIVE ---
+        if (ttsMode === 2) return;
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // Updated core text engine interceptor 
+    function speakText(text) {
+        if (!window.speechSynthesis) return;
+        lastSpokenText = text; 
+        window.speechSynthesis.cancel();
+        
+        // Silently discard all playback strings if fully muted
+        if (ttsMode === 2) return;
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function initApp() {
+        document.getElementById('start-overlay').style.display = 'none';
+        appReady = true;
+        speakText(instructionsText);
+    }
+
+    function updateAttackDisplay() {
+        const currentAttack = specialAttacks[attackIndex];
+        document.getElementById('attack-val').innerText = currentAttack;
+        speakText(currentAttack);
+    }
+
+    function toggleCheckbox(id, name) {
+        const checkbox = document.getElementById(id);
+        checkbox.checked = !checkbox.checked;
+        speakText(name + (checkbox.checked ? " checked" : " unchecked"));
+    }
+
+    window.addEventListener('keydown', function(event) {
+        if (event.code === 'Space' || event.key === ' ') {
+            event.preventDefault();
+            
+            if (spacePressed) return; 
+            spacePressed = true;
+            isHoldAction = false;
+
+            spaceTimer = setTimeout(() => {
+                isHoldAction = true;
+                if (!appReady) {
+                    initApp();
+                } else {
+                    speakText(lastSpokenText || instructionsText);
+                }
+            }, 500); 
+            return;
+        }
+
+        if (!appReady) return;
+
+        // --- NEW: C AND V CONTROLS FOR CRIT COUNT ---
+        if (event.key === 'c' || event.key === 'C') {
+            event.preventDefault();
+            if (critCount > 0) {
+                critCount--;
+                document.getElementById('crit-count-val').innerText = critCount;
+                speakText("crit count " + critCount);
+            }
+            return;
+        }
+        if (event.key === 'v' || event.key === 'V') {
+            event.preventDefault();
+            if (critCount < 100) {
+                critCount++;
+                document.getElementById('crit-count-val').innerText = critCount;
+                speakText("crit count " + critCount);
+            }
+            return;
+        }
+
+        // --- CHECKBOX TOGGLE KEY SHORTCUTS ---
+        if (event.key === 'a' || event.key === '1' || event.code === 'Digit1' || event.code === 'Numpad1') {
+            event.preventDefault();
+            toggleCheckbox('chk-prof', 'proficiency');
+            return;
+        }
+        if (event.key === 's' || event.key === '2' || event.code === 'Digit2' || event.code === 'Numpad2') {
+            event.preventDefault();
+            toggleCheckbox('chk-extra', 'extra training');
+            return;
+        }
+        if (event.key === 'd' || event.key === '3' || event.code === 'Digit3' || event.code === 'Numpad3') {
+            event.preventDefault();
+            toggleCheckbox('chk-mastery', 'mastery');
+            return;
+        }
+        // --- NEW: PRESS 4 TO TOGGLE RESILIENCE ---
+        if (event.key === 'f' || event.key === '4' || event.code === 'Digit4' || event.code === 'Numpad4') {
+            event.preventDefault();
+            toggleCheckbox('chk-resilience', 'resilience');
+            return;
+        }
+        // --- NEW: PRESS G TO ROTATE SPEECH OUTPUT MODES ---
+        if (event.key === 'g' || event.key === 'G' || event.code === 'KeyG') {
+            event.preventDefault();
+            toggleTTS();
+            return;
+        }
+
+        // CTRL + LEFT / RIGHT COMMAND HANDLING
+        if (event.ctrlKey && event.key === 'ArrowLeft') {
+            event.preventDefault();
+            attackIndex = (attackIndex - 1 + specialAttacks.length) % specialAttacks.length;
+            updateAttackDisplay();
+            return;
+        }
+        if (event.ctrlKey && event.key === 'ArrowRight') {
+            event.preventDefault();
+            attackIndex = (attackIndex + 1) % specialAttacks.length;
+            updateAttackDisplay();
+            return;
+        }
+
+        // LEFT BRACKET / RIGHT BRACKET HANDLING
+        if (event.key === '[' || event.code === 'BracketLeft') {
+            event.preventDefault();
+            attackIndex = (attackIndex - 1 + specialAttacks.length) % specialAttacks.length;
+            updateAttackDisplay();
+            return;
+        }
+        if (event.key === ']' || event.code === 'BracketRight') {
+            event.preventDefault();
+            attackIndex = (attackIndex + 1) % specialAttacks.length;
+            updateAttackDisplay();
+            return;
+        }
+
+        // CTRL + UP / DOWN CONTROL RANK
+        if (event.ctrlKey && event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (rank < 6) {
+                rank++;
+                document.getElementById('rank-val').innerText = rank;
+                speakText("rank " + rank);
+            }
+            return; 
+        }
+        if (event.ctrlKey && event.key === 'ArrowDown') {
+            event.preventDefault();
+            if (rank > 1) {
+                rank--;
+                document.getElementById('rank-val').innerText = rank;
+                speakText("rank " + rank);
+            }
+            return; 
+        }
+
+        // LEFT/RIGHT ARROWS CONTROL BONUS (EXCLUDES MODIFIERS SAFELY)
+        if (event.key === 'ArrowLeft' && !event.ctrlKey) {
+            event.preventDefault();
+            if (bonus > 0) {
+                bonus--;
+                document.getElementById('bonus-val').innerText = bonus;
+                speakText("plus " + bonus);
+            }
+            return;
+        } 
+        if (event.key === 'ArrowRight' && !event.ctrlKey) {
+            event.preventDefault();
+            if (bonus < 100) { 
+                bonus++;
+                document.getElementById('bonus-val').innerText = bonus;
+                speakText("plus " + bonus);
+            }
+            return;
+        } 
+        
+        // UP/DOWN ARROWS CONTROL DICE (EXCLUDES MODIFIERS SAFELY)
+        if (event.key === 'ArrowUp' && !event.ctrlKey) {
+            event.preventDefault();
+            if (diceCount < 12) { 
+                diceCount++;
+                document.getElementById('dice-val').innerText = diceCount;
+                speakText(diceCount + " dice");
+            }
+            return;
+        } 
+        if (event.key === 'ArrowDown' && !event.ctrlKey) {
+            event.preventDefault();
+            if (diceCount > 1) {
+                diceCount--;
+                document.getElementById('dice-val').innerText = diceCount;
+                speakText(diceCount + " dice");
+            }
+            return;
+        }
+    });
+
+    window.addEventListener('keyup', function(event) {
+        if (event.code === 'Space' || event.key === ' ') {
+            event.preventDefault();
+            
+            clearTimeout(spaceTimer);
+            spacePressed = false;
+
+            if (!isHoldAction) {
+                if (!appReady) {
+                    initApp();
+                } else {
+                    rollDice();
+                }
+            }
+        }
+    });
+    function rollDice() {
+        if (!appReady || words.length === 0) return;
+
+        let counts = { 'Crit': 0, 'Hit': 0, 'Skill': 0, 'Weird': 0, 'Blank': 0 };
+        let chosenWords = [];
+
+        // 1. Gather initial raw rolls securely from hardware noise
+        for (let i = 0; i < diceCount; i++) {
+            const array = new Uint32Array(1);
+            window.crypto.getRandomValues(array);
+            const randomIndex = array % words.length;
+            const randomWord = words[randomIndex];
+            
+            chosenWords.push(randomWord);
+
+            if (counts.hasOwnProperty(randomWord)) {
+                counts[randomWord]++;
+            }
+        }
+
+        // --- CHECKBOX CONDITIONS ---
+        const isProficient = document.getElementById('chk-prof').checked;
+        const hasExtraTraining = document.getElementById('chk-extra').checked;
+        const hasMastery = document.getElementById('chk-mastery').checked;
+        const hasResilience = document.getElementById('chk-resilience').checked;
+
+        // --- NEW: RESILIENCE BLANK-TO-SKILL PIPELINE LAYER ---
+        // Runs immediately first to catch and convert blanks before extra training rerolls or other modifications
+        if (hasResilience && counts['Blank'] > 0) {
+            let blanksCount = counts['Blank'];
+            
+            // Transfer all Blank math values to the Skill tracker, then clear Blanks
+            counts['Skill'] += blanksCount;
+            counts['Blank'] = 0;
+
+            // Map over array to visually rename any baseline "Blank" to "Skill (Resilience)"
+            chosenWords = chosenWords.map(word => word === 'Blank' ? 'Skill (Resilience)' : word);
+        }
+
+        // --- MASTERY BONUS CRIT ADDITION LAYER ---
+        // Automatically injects a baseline Crit into your pools before calculation modifications
+        if (hasMastery) {
+            counts['Crit']++;
+            chosenWords.push("Crit (Mastery)");
+        }
+
+        // --- EXTRA TRAINING REROLL PIPELINE LAYER (REPLACES BLANKS CLEANLY) ---
+        if (hasExtraTraining && counts['Blank'] > 0) {
+            let initialBlanksCount = counts['Blank'];
+            
+            // Wipe the initial blanks from your scoring tallies
+            counts['Blank'] = 0; 
+            
+            // Remove the initial Blank values from the visual display list entirely
+            chosenWords = chosenWords.filter(word => word !== 'Blank');
+
+            // Reroll only the specific number of blank dice that landed
+            for (let j = 0; j < initialBlanksCount; j++) {
+                const array = new Uint32Array(1);
+                window.crypto.getRandomValues(array);
+                const randomIndex = array % words.length;
+                const randomWord = words[randomIndex];
+                
+                // Track the math point calculations using the clean, raw word
+                if (counts.hasOwnProperty(randomWord)) {
+                    counts[randomWord]++;
+                }
+
+                // Append the text block with the parenthetical note behind the new result string
+                chosenWords.push(randomWord + " (Rerolled)");
+            }
+        }
+        // --------------------------------------------------
+
+        // --- SPECIAL ATTACK MODIFIERS ---
+        const activeAttack = specialAttacks[attackIndex];
+        
+        if (activeAttack === "Advantage") {
+            // Transfer all Hits to Crits, then clear Hits
+            counts['Crit'] += counts['Hit'];
+            counts['Hit'] = 0;
+            
+            // Skill conversion only happens if Proficiency checkbox is enabled
+            if (isProficient) {
+                let convertCount = Math.min(counts['Skill'], rank);
+                counts['Hit'] += convertCount;
+                counts['Skill'] -= convertCount;
+            }
+        } 
+        else if (activeAttack === "Disadvantage") {
+            // Transfer all Hits to Blanks, then clear Hits
+            counts['Blank'] += counts['Hit'];
+            counts['Hit'] = 0;
+            
+            // Skill conversion only happens if Proficiency checkbox is enabled
+            if (isProficient) {
+                let convertCount = Math.min(counts['Skill'], rank);
+                counts['Hit'] += convertCount;
+                counts['Skill'] -= convertCount;
+            }
+        }
+        else if (activeAttack === "Backstab") {
+            // Skill conversion only happens if Proficiency checkbox is enabled
+            if (isProficient) {
+                let convertCount = Math.min(counts['Skill'], rank);
+                counts['Crit'] += convertCount;
+                counts['Skill'] -= convertCount;
+            }
+        }
+        else if (activeAttack === "Calculated Strike") {
+            // Transfer all Hits to Blanks, then clear Hits
+            counts['Blank'] += counts['Hit'];
+            counts['Hit'] = 0;
+            
+            // If proficient, change up to Rank skills into Crits instead of hits
+            if (isProficient) {
+                let convertCount = Math.min(counts['Skill'], rank);
+                counts['Crit'] += convertCount;
+                counts['Skill'] -= convertCount;
+            }
+        }
+        else if (activeAttack === "Crushing Blow") {
+            // Transfer all Skills to Blanks, then clear Skills
+            counts['Blank'] += counts['Skill'];
+            counts['Skill'] = 0;
+            
+            // Turn up to your current Rank in Hits into Crits
+            let convertCount = Math.min(counts['Hit'], rank);
+            counts['Crit'] += convertCount;
+            counts['Hit'] -= convertCount;
+        }
+        else {
+            // --- STANDARD MODE ---
+            // Skill conversion only happens if Proficiency checkbox is enabled
+            if (isProficient) {
+                let convertCount = Math.min(counts['Skill'], rank);
+                counts['Hit'] += convertCount;
+                counts['Skill'] -= convertCount;
+            }
+        }
+        // -----------------------------------------------
+
+        // SKILL MATH ENGINE
+        // Base points calculate all your modified Hits and Crits
+        let basePoints = (counts['Crit'] * critCount) + (counts['Hit'] * 1);
+        
+        // Final total amount
+        let totalAmount = basePoints;
+
+        if (counts['Crit'] > 0) {
+            totalAmount = totalAmount * counts['Crit'];
+        }
+
+        let damageAmount = totalAmount + bonus;
+
+        document.getElementById('rolls-display').innerText = "Rolls: " + chosenWords.join(', ');
+
+        document.getElementById('counts-display').innerHTML = `
+            <div class="count-item">Crits: ${counts['Crit']}</div>
+            <div class="count-item">Hits: ${counts['Hit']}</div>
+            <div class="count-item">Skills: ${counts['Skill']}</div>
+            <div class="count-item">Weirds: ${counts['Weird']}</div>
+            <div class="count-item">Blanks: ${counts['Blank']}</div>
+            <div class="total-display">
+                <div>Subtotal: ${totalAmount}</div>
+                <div>Total: ${damageAmount}</div>
+            </div>
+        `;
+ // --- DYNAMIC AUDIO PHRASING ENGINE ---
+        // Checks if there is at least 1 crit in the modified scoring pool
+        const hitPhrasing = (counts['Crit'] > 0) ? "to critically succeed" : "to succeed";
+        let resultSummary = "";
+
+        if (ttsMode === 1) {
+            // Quick Talk output pattern skips counting dice logs completely
+            resultSummary = `${totalAmount} ${hitPhrasing}., and a total of ${damageAmount}`;
+        } else {
+            // Standard output logs full data readouts matching screen layout boxes
+            resultSummary = 
+                `${counts['Crit']} ${counts['Crit'] === 1 ? 'crit' : 'crits'}, ` +
+                `${counts['Hit']} ${counts['Hit'] === 1 ? 'hit' : 'hits'}, ` +
+                `${counts['Skill']} ${counts['Skill'] === 1 ? 'skill' : 'skills'}, ` +
+                `${counts['Weird']} ${counts['Weird'] === 1 ? 'weird' : 'weirds'}, ` +
+                `${counts['Blank']} ${counts['Blank'] === 1 ? 'blank' : 'blanks'}, ` +
+                `for a subtotal of ${totalAmount} ${hitPhrasing}., and a total of ${damageAmount}`;
+        }
+
+        speakText(resultSummary);
+    }
+
+</script>
+
+</body>
+</html>
