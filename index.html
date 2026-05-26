@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>The Crystal Sphere Dice Roller</title>
+    <title>Random Word Reader</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -37,6 +37,26 @@
             background-color: #dc3545;
             color: white;
         }
+      
+              .auto-toggle-btn {
+            position: absolute;
+            top: 60px; /* Aligns perfectly right below the speech button */
+            left: 20px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            background-color: #6c757d;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 20;
+            min-width: 140px;
+        }
+        .auto-toggle-btn.active {
+            background-color: #28a745;
+        }
+      
         .container {
             text-align: center;
             background: white;
@@ -157,6 +177,8 @@
     <button onclick="initApp()">Start App</button>
 </div>
 
+<button id="auto-toggle" class="auto-toggle-btn" onclick="toggleAuto()">Auto: On</button>
+  
 <div class="container">
     <!-- Styled App Title Header -->
     <h1 style="font-size: 24px; color: #333; margin-top: 0; margin-bottom: 24px; border-bottom: 2px solid #f0f2f5; padding-bottom: 12px;">
@@ -190,7 +212,7 @@
         </div>
 
         <div class="special-attack-row">
-         <span id="attack-val">Standard Roll</span>
+         <span id="attack-val">Attack/Avoid</span>
         </div>
     </div>
 
@@ -201,7 +223,7 @@
 
 <script>
     const words = ['Crit', 'Hit', 'Hit', 'Skill', 'Skill', 'Skill', 'Weird', 'Blank'];
-    const specialAttacks = ["Standard Roll", "Calculated Strike", "Crushing Blow", "Backstab", "Disadvantage", "Advantage"];
+    const specialAttacks = ["Attack/Avoid", "Check/Save", "Calculated Strike", "Crushing Blow", "Backstab", "Disadvantage", "Advantage"];
 
     let attackIndex = 0;
     let rank = 1;
@@ -213,7 +235,10 @@
     let spacePressed = false;
     let spaceTimer = null;
     let isHoldAction = false;
-    let lastSpokenText = ""; 
+    let lastSpokenText = "";
+    let pendingChoice = false;
+    let choiceCounts = null;
+    let choiceWords = [];
 
     // Expanded welcome speech sequence with checkbox key maps listed
     const instructionsText = "press the up and down arrows to adjust the number of dice you are rolling, press the left and right arrows to set your bonus, press Control up or control down to set your rank, press control left or control right to choose your attack type, and Press a, s, d, or f to toggle proficiency, extra training, mastery, and resiliance, and press c and v to lower or raise your crit count. Press space to roll. Press and hold space to repeat audio.";
@@ -247,6 +272,24 @@
         }
     }
 
+      // Global variable initialized to track the automatic processing flag state
+    let autoEnabled = true;
+
+    function toggleAuto() {
+        autoEnabled = !autoEnabled;
+        const btn = document.getElementById('auto-toggle');
+        if (autoEnabled) {
+            btn.innerText = "Auto: ON";
+            btn.classList.add('active');
+            speakText("auto on");
+        } else {
+            btn.innerText = "Auto: OFF";
+            btn.classList.remove('active');
+            speakText("auto off");
+        }
+    }
+
+  
     // Core text engine interceptor 
     function speakText(text) {
         if (!window.speechSynthesis) return;
@@ -296,7 +339,6 @@
     window.addEventListener('keydown', function(event) {
         if (event.code === 'Space' || event.key === ' ') {
             event.preventDefault();
-            
             if (spacePressed) return; 
             spacePressed = true;
             isHoldAction = false;
@@ -305,6 +347,9 @@
                 isHoldAction = true;
                 if (!appReady) {
                     initApp();
+                } else if (pendingChoice) {
+                    // --- RESOLUTION: LONG PRESS CHOOSE RESILIENCE ---
+                    resolveChoice(true);
                 } else {
                     speakText(lastSpokenText || instructionsText);
                 }
@@ -360,6 +405,13 @@
         if (event.key === 'g' || event.key === 'G' || event.code === 'KeyG') {
             event.preventDefault();
             toggleTTS();
+            return;
+        }
+      
+              // --- NEW: PRESS Q TO TOGGLE AUTO PROCESSING MODE ---
+        if (event.key === 'q' || event.key === 'Q' || event.code === 'KeyQ') {
+            event.preventDefault();
+            toggleAuto();
             return;
         }
 
@@ -455,19 +507,23 @@
     window.addEventListener('keyup', function(event) {
         if (event.code === 'Space' || event.key === ' ') {
             event.preventDefault();
-            
             clearTimeout(spaceTimer);
             spacePressed = false;
 
+            // Only execute standard tap actions if the button wasn't held down for 500ms
             if (!isHoldAction) {
                 if (!appReady) {
-                    initApp();
+                    initApp(); // First press ever: start the app
+                } else if (pendingChoice) {
+                    // RESOLUTION: SHORT TAP CHOOSE EXTRA TRAINING
+                    resolveChoice(false);
                 } else {
-                    rollDice();
+                    rollDice(); // Subsequent regular taps: roll the dice instantly!
                 }
             }
         }
     });
+  
     function rollDice() {
         if (!appReady || words.length === 0) return;
 
@@ -488,69 +544,140 @@
             }
         }
 
+        // --- AUTO DISABLED RAW-ONLY FORK INTERCEPTOR ---
+        if (!autoEnabled) {
+            document.getElementById('rolls-display').innerText = "Rolls: " + chosenWords.join(', ');
+            document.getElementById('counts-display').innerHTML = `
+                <div class="count-item">Crits: ${counts['Crit']}</div>
+                <div class="count-item">Hits: ${counts['Hit']}</div>
+                <div class="count-item">Skills: ${counts['Skill']}</div>
+                <div class="count-item">Weirds: ${counts['Weird']}</div>
+                <div class="count-item">Blanks: ${counts['Blank']}</div>
+            `;
+
+            const rawSummary = 
+                `${counts['Crit']} ${counts['Crit'] === 1 ? 'crit' : 'crits'}, ` +
+                `${counts['Hit']} ${counts['Hit'] === 1 ? 'hit' : 'hits'}, ` +
+                `${counts['Skill']} ${counts['Skill'] === 1 ? 'skill' : 'skills'}, ` +
+                `${counts['Weird']} ${counts['Weird'] === 1 ? 'weird' : 'weirds'}, ` +
+                `${counts['Blank']} ${counts['Blank'] === 1 ? 'blank' : 'blanks'}.`;
+
+            speakText(rawSummary);
+            return; 
+        }
+
         // --- CHECKBOX CONDITIONS ---
-        const isProficient = document.getElementById('chk-prof').checked;
         const hasExtraTraining = document.getElementById('chk-extra').checked;
-        const hasMastery = document.getElementById('chk-mastery').checked;
         const hasResilience = document.getElementById('chk-resilience').checked;
 
-        // --- NEW: RESILIENCE BLANK-TO-SKILL PIPELINE LAYER ---
-        // Runs immediately first to catch and convert blanks before extra training rerolls or other modifications
-        if (hasResilience && counts['Blank'] > 0) {
-            let blanksCount = counts['Blank'];
+        // --- NEW: EXTRA TRAINING & RESILIENCE CHOICE INTERCEPTOR ---
+        if (hasExtraTraining && hasResilience && counts['Blank'] > 0) {
+            pendingChoice = true;
+            choiceCounts = counts;
+            choiceWords = chosenWords;
+
+            document.getElementById('rolls-display').innerText = "Choice Required: " + chosenWords.join(', ');
+            document.getElementById('counts-display').innerHTML = `
+                <div style="font-weight: bold; color: #dc3545; margin-bottom: 10px;">
+                    Skills: ${counts['Skill']} | Blanks: ${counts['Blank']}
+                </div>
+                <div style="font-size: 16px; color: #666; line-height: 1.4;">
+                    Press Space to use Extra Training (Reroll)<br>
+                    Press and hold Space to use Resilience (Skills)
+                </div>
+            `;
             
-            // Transfer all Blank math values to the Skill tracker, then clear Blanks
+            // Pluralization grammar handling for smooth text-to-speech narration
+            const skillPlural = counts['Skill'] === 1 ? 'skill' : 'skills';
+            const blankPlural = counts['Blank'] === 1 ? 'blank' : 'blanks';
+            
+            const choicePrompt = `you rolled ${counts['Skill']} ${skillPlural} and ${counts['Blank']} ${blankPlural}. press space to use Extra Training or press and hold space to use resilience`;
+            speakText(choicePrompt);
+            return; // Freezes processing here until user selects option
+        }
+
+
+        // Direct pass-through route if no checkbox conflict exists
+        executePipeline(counts, chosenWords);
+    }
+
+    function resolveChoice(chooseResilience) {
+        pendingChoice = false;
+        let counts = choiceCounts;
+        let chosenWords = choiceWords;
+
+        if (chooseResilience) {
+            // Apply Resilience calculation path
+            let blanksCount = counts['Blank'];
             counts['Skill'] += blanksCount;
             counts['Blank'] = 0;
-
-            // Map over array to visually rename any baseline "Blank" to "Skill (Resilience)"
             chosenWords = chosenWords.map(word => word === 'Blank' ? 'Skill (Resilience)' : word);
-        }
-
-        // --- MASTERY BONUS CRIT ADDITION LAYER ---
-        // Automatically injects a baseline Crit into your pools before calculation modifications
-        if (hasMastery) {
-            counts['Crit']++;
-            chosenWords.push("Crit (Mastery)");
-        }
-
-        // --- EXTRA TRAINING REROLL PIPELINE LAYER (REPLACES BLANKS CLEANLY) ---
-        if (hasExtraTraining && counts['Blank'] > 0) {
+        } else {
+            // Apply Extra Training Reroll calculation path
             let initialBlanksCount = counts['Blank'];
-            
-            // Wipe the initial blanks from your scoring tallies
             counts['Blank'] = 0; 
-            
-            // Remove the initial Blank values from the visual display list entirely
             chosenWords = chosenWords.filter(word => word !== 'Blank');
 
-            // Reroll only the specific number of blank dice that landed
             for (let j = 0; j < initialBlanksCount; j++) {
                 const array = new Uint32Array(1);
                 window.crypto.getRandomValues(array);
                 const randomIndex = array % words.length;
                 const randomWord = words[randomIndex];
                 
-                // Track the math point calculations using the clean, raw word
-                if (counts.hasOwnProperty(randomWord)) {
-                    counts[randomWord]++;
-                }
-
-                // Append the text block with the parenthetical note behind the new result string
+                if (counts.hasOwnProperty(randomWord)) counts[randomWord]++;
                 chosenWords.push(randomWord + " (Rerolled)");
             }
         }
-        // --------------------------------------------------
+
+        executePipeline(counts, chosenWords, true);
+    }
+
+    function executePipeline(counts, chosenWords, chosenAlternative = false) {
+        const isProficient = document.getElementById('chk-prof').checked;
+        const hasExtraTraining = document.getElementById('chk-extra').checked;
+        const hasMastery = document.getElementById('chk-mastery').checked;
+        const hasResilience = document.getElementById('chk-resilience').checked;
+
+        // Skip standard modifier processing layers if choice handler already executed them downstream
+        if (!chosenAlternative) {
+            if (hasResilience && counts['Blank'] > 0) {
+                let blanksCount = counts['Blank'];
+                counts['Skill'] += blanksCount;
+                counts['Blank'] = 0;
+                chosenWords = chosenWords.map(word => word === 'Blank' ? 'Skill (Resilience)' : word);
+            }
+
+            if (hasMastery) {
+                counts['Crit']++;
+                chosenWords.push("Crit (Mastery)");
+            }
+
+            if (hasExtraTraining && counts['Blank'] > 0) {
+                let initialBlanksCount = counts['Blank'];
+                counts['Blank'] = 0; 
+                chosenWords = chosenWords.filter(word => word !== 'Blank');
+
+                for (let j = 0; j < initialBlanksCount; j++) {
+                    const array = new Uint32Array(1);
+                    window.crypto.getRandomValues(array);
+                    const randomIndex = array % words.length;
+                    const randomWord = words[randomIndex];
+                    if (counts.hasOwnProperty(randomWord)) counts[randomWord]++;
+                    chosenWords.push(randomWord + " (Rerolled)");
+                }
+            }
+        } else if (hasMastery) {
+            // Re-apply mastery boost cleanly if alternative choice track bypass loop was taken
+            counts['Crit']++;
+            chosenWords.push("Crit (Mastery)");
+        }
 
         // --- SPECIAL ATTACK MODIFIERS ---
         const activeAttack = specialAttacks[attackIndex];
         
         if (activeAttack === "Advantage") {
-            // Transfer all Hits to Crits, then clear Hits
             counts['Crit'] += counts['Hit'];
             counts['Hit'] = 0;
-            
-            // Skill conversion only happens if Proficiency checkbox is enabled
             if (isProficient) {
                 let convertCount = Math.min(counts['Skill'], rank);
                 counts['Hit'] += convertCount;
@@ -558,11 +685,8 @@
             }
         } 
         else if (activeAttack === "Disadvantage") {
-            // Transfer all Hits to Blanks, then clear Hits
             counts['Blank'] += counts['Hit'];
             counts['Hit'] = 0;
-            
-            // Skill conversion only happens if Proficiency checkbox is enabled
             if (isProficient) {
                 let convertCount = Math.min(counts['Skill'], rank);
                 counts['Hit'] += convertCount;
@@ -570,7 +694,6 @@
             }
         }
         else if (activeAttack === "Backstab") {
-            // Skill conversion only happens if Proficiency checkbox is enabled
             if (isProficient) {
                 let convertCount = Math.min(counts['Skill'], rank);
                 counts['Crit'] += convertCount;
@@ -578,11 +701,8 @@
             }
         }
         else if (activeAttack === "Calculated Strike") {
-            // Transfer all Hits to Blanks, then clear Hits
             counts['Blank'] += counts['Hit'];
             counts['Hit'] = 0;
-            
-            // If proficient, change up to Rank skills into Crits instead of hits
             if (isProficient) {
                 let convertCount = Math.min(counts['Skill'], rank);
                 counts['Crit'] += convertCount;
@@ -590,38 +710,43 @@
             }
         }
         else if (activeAttack === "Crushing Blow") {
-            // Transfer all Skills to Blanks, then clear Skills
             counts['Blank'] += counts['Skill'];
             counts['Skill'] = 0;
-            
-            // Turn up to your current Rank in Hits into Crits
             let convertCount = Math.min(counts['Hit'], rank);
             counts['Crit'] += convertCount;
             counts['Hit'] -= convertCount;
         }
         else {
-            // --- STANDARD MODE ---
-            // Skill conversion only happens if Proficiency checkbox is enabled
             if (isProficient) {
                 let convertCount = Math.min(counts['Skill'], rank);
                 counts['Hit'] += convertCount;
                 counts['Skill'] -= convertCount;
             }
         }
-        // -----------------------------------------------
 
         // SKILL MATH ENGINE
-        // Base points calculate all your modified Hits and Crits
         let basePoints = (counts['Crit'] * critCount) + (counts['Hit'] * 1);
-        
-        // Final total amount
         let totalAmount = basePoints;
 
-        if (counts['Crit'] > 0) {
+        // --- CRIT MULTIPLICATION ENGINE ---
+        // Skips multiplication entirely if the attack type is "Skill Check"
+        if (counts['Crit'] > 0 && activeAttack !== "Check/Save") {
             totalAmount = totalAmount * counts['Crit'];
         }
 
         let damageAmount = totalAmount + bonus;
+
+        // --- DYNAMIC LABELS FOR UI AND TTS SEPARATION ---
+        let uiHitLabel = "To Hit";
+        let ttsHitPhrasing = "";
+
+        if (activeAttack === "Avoid") {
+            uiHitLabel = "To Avoid";
+            ttsHitPhrasing = "to avoid";
+        } else {
+            uiHitLabel = "To Hit";
+            ttsHitPhrasing = (counts['Crit'] > 0) ? "with a crit" : "";
+        }
 
         document.getElementById('rolls-display').innerText = "Rolls: " + chosenWords.join(', ');
 
@@ -636,27 +761,25 @@
                 <div>Total: ${damageAmount}</div>
             </div>
         `;
- // --- DYNAMIC AUDIO PHRASING ENGINE ---
-        // Checks if there is at least 1 crit in the modified scoring pool
-        const hitPhrasing = (counts['Crit'] > 0) ? "to critically succeed" : "to succeed";
+
+        // --- DYNAMIC AUDIO PHRASING ENGINE ---
         let resultSummary = "";
 
         if (ttsMode === 1) {
-            // Quick Talk output pattern skips counting dice logs completely
-            resultSummary = `${totalAmount} ${hitPhrasing}., and a total of ${damageAmount}`;
+            resultSummary = `${totalAmount} ${ttsHitPhrasing}., and a total of ${damageAmount}`;
         } else {
-            // Standard output logs full data readouts matching screen layout boxes
-            resultSummary = 
+            resultSummary =  
                 `${counts['Crit']} ${counts['Crit'] === 1 ? 'crit' : 'crits'}, ` +
                 `${counts['Hit']} ${counts['Hit'] === 1 ? 'hit' : 'hits'}, ` +
                 `${counts['Skill']} ${counts['Skill'] === 1 ? 'skill' : 'skills'}, ` +
                 `${counts['Weird']} ${counts['Weird'] === 1 ? 'weird' : 'weirds'}, ` +
                 `${counts['Blank']} ${counts['Blank'] === 1 ? 'blank' : 'blanks'}, ` +
-                `for a subtotal of ${totalAmount} ${hitPhrasing}., and a total of ${damageAmount}`;
+                `for a subtotal of ${totalAmount} ${ttsHitPhrasing}., and a total of ${damageAmount}`;
         }
 
         speakText(resultSummary);
     }
+
 
 </script>
 
