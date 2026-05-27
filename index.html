@@ -15,7 +15,45 @@
             background-color: #f0f2f5;
             position: relative;
         }
-        .tts-toggle-btn {
+      
+              .char-btn.delete { background-color: #dc3545; }
+        .char-btn.delete:hover { background-color: #bd2130; }
+      
+              .character-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f0f2f5;
+            gap: 10px;
+        }
+        .character-select {
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            flex-grow: 1;
+            cursor: pointer;
+        }
+        .char-btn {
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .char-btn.new { background-color: #28a745; }
+        .char-btn.new:hover { background-color: #218838; }
+        .char-btn.save { background-color: #007bff; }
+        .char-btn.save:hover { background-color: #0056b3; }
+      
+      .tts-toggle-btn {
             position: absolute;
             top: 20px;
             left: 20px;
@@ -112,6 +150,37 @@
             width: 80%;
             box-sizing: border-box;
         }
+      
+              .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            width: 100%;
+            margin-top: 20px;
+            border-top: 2px dashed #eee;
+            padding-top: 15px;
+        }
+      
+        .preset-slot {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 5px;
+            font-size: 12px;
+            color: #333;
+            cursor: pointer;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.2s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .preset-slot:hover {
+            background-color: #e2e6ea;
+            border-color: #bbb;
+        }
+      
         button {
             padding: 15px 30px;
             font-size: 18px;
@@ -180,7 +249,19 @@
 <button id="auto-toggle" class="auto-toggle-btn" onclick="toggleAuto()">Auto: On</button>
   
 <div class="container">
-    <!-- Styled App Title Header -->
+  
+  <div class="container">
+    <!-- Top Character Management Ribbon Bar -->
+    <div class="character-bar">
+        <select id="char-dropdown" class="character-select" onchange="handleCharacterSelect()">
+            <option value="">-- Select Character Slot --</option>
+        </select>
+        <button class="char-btn new" onclick="createNewCharacter()">New</button>
+        <button class="char-btn save" onclick="saveActiveCharacter()">Save</button>
+       <button class="char-btn delete" onclick="deleteActiveCharacter()">Delete</button>
+    </div>
+  
+  <!-- Styled App Title Header -->
     <h1 style="font-size: 24px; color: #333; margin-top: 0; margin-bottom: 24px; border-bottom: 2px solid #f0f2f5; padding-bottom: 12px;">
         The Crystal Sphere: Dice Roller
     </h1>
@@ -219,6 +300,19 @@
     <button onclick="rollDice()">Roll</button>
     <div id="rolls-display" class="rolls-list"></div>
     <div id="counts-display" class="results-box"></div>
+      <div id="presets-container" class="presets-grid">
+        <!-- Generates 10 editable preset slot buttons -->
+        <div class="preset-slot" id="p-slot-1" onclick="renamePreset(1)">Preset 1</div>
+        <div class="preset-slot" id="p-slot-2" onclick="renamePreset(2)">Preset 2</div>
+        <div class="preset-slot" id="p-slot-3" onclick="renamePreset(3)">Preset 3</div>
+        <div class="preset-slot" id="p-slot-4" onclick="renamePreset(4)">Preset 4</div>
+        <div class="preset-slot" id="p-slot-5" onclick="renamePreset(5)">Preset 5</div>
+        <div class="preset-slot" id="p-slot-6" onclick="renamePreset(6)">Preset 6</div>
+        <div class="preset-slot" id="p-slot-7" onclick="renamePreset(7)">Preset 7</div>
+        <div class="preset-slot" id="p-slot-8" onclick="renamePreset(8)">Preset 8</div>
+        <div class="preset-slot" id="p-slot-9" onclick="renamePreset(9)">Preset 9</div>
+        <div class="preset-slot" id="p-slot-0" onclick="renamePreset(10)">Preset 10</div>
+    </div>
 </div>
 
 <script>
@@ -239,13 +333,363 @@
     let pendingChoice = false;
     let choiceCounts = null;
     let choiceWords = [];
+  
+    // Character Profile State Managers
+    let charactersData = JSON.parse(localStorage.getItem('cs_characters')) || {};
+    let activeCharacterId = localStorage.getItem('cs_active_char_id') || "";
+
+    // Presets allocation structure (Adjusted to look for active profile blocks)
+    let presets = {};
+    let presetNames = {
+        1:"Preset 1", 2:"Preset 2", 3:"Preset 3", 4:"Preset 4", 5:"Preset 5",
+        6:"Preset 6", 7:"Preset 7", 8:"Preset 8", 9:"Preset 9", 10:"Preset 10"
+    };
+    let presetTimers = {};
+    let activePresetHolds = {};
+  
+    let activePresetId = null; 
+    let manualBackupState = null; 
 
     // Expanded welcome speech sequence with checkbox key maps listed
-    const instructionsText = "press the up and down arrows to adjust the number of dice you are rolling, press the left and right arrows to set your bonus, press Control up or control down to set your rank, press control left or control right to choose your attack type, and Press a, s, d, or f to toggle proficiency, extra training, mastery, and resiliance, and press c and v to lower or raise your crit count. Press space to roll. Press and hold space to repeat audio.";
+    // --- SPECIALIZED VOICE GUIDANCE SEGMENTS ---
+    const initialPromptText = "Please load a character using f 1 through f 4.";
+    const tutorialSteps = {
+        5:  "press the up and down arrows to adjust the number of dice you are rolling",
+        6:  "press the left and right arrows to set your bonus",
+        7:  "press control left or control right to choose the type of roll",
+        8:  "Press a, s, d, or f to toggle proficiency, extra training, mastery, and resilience",
+        9:  "Press c or v to set your crit count",
+        10: "Hold 0 through 9 to save presets, and Press 0 through 9 to load presets. To clear a preset, press control plus the desired number.",
+        11: "press Control up or control down to set your rank",
+        12: "Press g to control speech setting, and Press H to toggle auto calculations."
+    };
     
     // Three-state loop manager: 0 = ON, 1 = Quick Talk, 2 = OFF
     let ttsMode = 0; 
 
+      function rebuildCharacterDropdown() {
+        const dropdown = document.getElementById('char-dropdown');
+        dropdown.innerHTML = '<option value="">-- Select Character Slot --</option>';
+        
+        for (let id in charactersData) {
+            let option = document.createElement('option');
+            option.value = id;
+            option.innerText = charactersData[id].name;
+            if (id === activeCharacterId) option.selected = true;
+            dropdown.appendChild(option);
+        }
+    }
+  
+    function createNewCharacter() {
+        window.speechSynthesis.cancel();
+        speakText("please name your character");
+        let name = prompt("Enter character name:");
+        if (!name || name.trim() === "") return;
+        name = name.trim();
+
+        let id = "char_" + Date.now(); // Unique cryptographic profile key index block
+        
+        // Structure baseline defaults matching player metrics
+        charactersData[id] = {
+            name: name,
+            rank: 1, diceCount: 6, bonus: 0, critCount: 0, attackIndex: 0,
+            prof: false, extra: false, mastery: false, resilience: false,
+            presets: {},
+            presetNames: {
+                1:"Preset 1", 2:"Preset 2", 3:"Preset 3", 4:"Preset 4", 5:"Preset 5",
+                6:"Preset 6", 7:"Preset 7", 8:"Preset 8", 9:"Preset 9", 10:"Preset 10"
+            }
+        };
+
+        localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+        activeCharacterId = id;
+        localStorage.setItem('cs_active_char_id', id);
+        
+        rebuildCharacterDropdown();
+        loadCharacterSession(id, false);
+    }
+
+    function saveActiveCharacter() {
+        if (!activeCharacterId || !charactersData[activeCharacterId]) {
+            speakText("No character selected to save");
+            return;
+        }
+
+        // Bundle current dashboard stats into active profile layout state
+        charactersData[activeCharacterId].rank = rank;
+        charactersData[activeCharacterId].diceCount = diceCount;
+        charactersData[activeCharacterId].bonus = bonus;
+        charactersData[activeCharacterId].critCount = critCount;
+        charactersData[activeCharacterId].attackIndex = attackIndex;
+        charactersData[activeCharacterId].prof = document.getElementById('chk-prof').checked;
+        charactersData[activeCharacterId].extra = document.getElementById('chk-extra').checked;
+        charactersData[activeCharacterId].mastery = document.getElementById('chk-mastery').checked;
+        charactersData[activeCharacterId].resilience = document.getElementById('chk-resilience').checked;
+        
+        // Bundle 10 hotkey presets directly inside character object architecture
+        charactersData[activeCharacterId].presets = presets;
+        charactersData[activeCharacterId].presetNames = presetNames;
+
+        localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+        speakText("Saved settings for " + charactersData[activeCharacterId].name);
+    }
+
+    function handleCharacterSelect() {
+        let selectedId = document.getElementById('char-dropdown').value;
+        if (!selectedId) return;
+        loadCharacterSession(selectedId, false);
+    }
+
+    function loadCharacterSession(id, isInitialBoot) {
+        if (!charactersData[id]) return;
+        activeCharacterId = id;
+        localStorage.setItem('cs_active_char_id', id);
+
+        const data = charactersData[id];
+        
+        // --- NEW FIX: Force the visual dropdown bar to select the matching character name ---
+        document.getElementById('char-dropdown').value = id;
+      
+        // Restore stats
+        rank = data.rank;
+        diceCount = data.diceCount;
+        bonus = data.bonus;
+        critCount = data.critCount;
+        attackIndex = data.attackIndex;
+
+        document.getElementById('rank-val').innerText = rank;
+        document.getElementById('dice-val').innerText = diceCount;
+        document.getElementById('bonus-val').innerText = bonus;
+        document.getElementById('crit-count-val').innerText = critCount;
+
+        document.getElementById('chk-prof').checked = data.prof;
+        document.getElementById('chk-extra').checked = data.extra;
+        document.getElementById('chk-mastery').checked = data.mastery;
+        document.getElementById('chk-resilience').checked = data.resilience;
+
+        // Load isolated character preset bank metrics
+        presets = data.presets || {};
+        presetNames = data.presetNames || {
+            1:"Preset 1", 2:"Preset 2", 3:"Preset 3", 4:"Preset 4", 5:"Preset 5",
+            6:"Preset 6", 7:"Preset 7", 8:"Preset 8", 9:"Preset 9", 10:"Preset 10"
+        };
+
+        // Re-render button text slots matching profile block
+        for (let num = 1; num <= 10; num++) {
+            let displayId = (num === 10) ? 0 : num;
+            document.getElementById('p-slot-' + displayId).innerText = presetNames[num];
+        }
+
+        updateAttackDisplay(true); // --- FIX: Updates visual screen text silently on boot
+
+        if (!isInitialBoot) {
+            speakText("welcome " + data.name + ". You can save at any time by pressing Caps Lock. Press space to roll, or press F 5 through F 12 to listen to the tutorial. Press and hold Space to repeat audio.");
+        }
+    }
+  
+      function deleteActiveCharacter() {
+        if (!activeCharacterId || !charactersData[activeCharacterId]) {
+            speakText("No character active to delete");
+            return;
+        }
+
+        const nameToErase = charactersData[activeCharacterId].name;
+        window.speechSynthesis.cancel();
+        
+        // Browser modal protection guard check
+        let verify = confirm("Are you sure you want to permanently delete " + nameToErase + "?");
+        if (!verify) return;
+
+        // Strip profile data keys entirely out of internal maps
+        delete charactersData[activeCharacterId];
+        localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+
+        speakText(nameToErase + " deleted");
+
+        // Clear layout state trackers
+        activeCharacterId = "";
+        localStorage.removeItem('cs_active_char_id');
+
+        // Re-render select selector layout metrics
+        rebuildCharacterDropdown();
+
+        // Kick interface framework cleanly back to the cold-boot menu layout state
+        document.getElementById('rolls-display').innerText = "System Ready.";
+        document.getElementById('counts-display').innerHTML = `
+            <div style="font-weight: bold; color: #007bff; font-size: 22px; text-align: center; margin-top: 10px; line-height: 1.4;">
+                Welcome to The Crystal Sphere
+            </div>
+            <div style="font-size: 16px; color: #666; text-align: center; margin-top: 12px; line-height: 1.5;">
+                Please load a character configuration:<br>
+                Press <span style="font-weight:bold; color:#333">F1</span>, <span style="font-weight:bold; color:#333">F2</span>, <span style="font-weight:bold; color:#333">F3</span>, or <span style="font-weight:bold; color:#333">F4</span>
+            </div>
+        `;
+        
+        // Wipe old profile slot names off button text grids
+        for (let num = 1; num <= 10; num++) {
+            let displayId = (num === 10) ? 0 : num;
+            document.getElementById('p-slot-' + displayId).innerText = "Preset " + num;
+        }
+        
+        updateAttackDisplay(true);
+        speakText(initialPromptText);
+    }
+  
+    function savePreset(num) {
+        presets[num] = {
+            diceCount: diceCount,
+            bonus: bonus,
+            critCount: critCount,
+            attackIndex: attackIndex,
+            prof: document.getElementById('chk-prof').checked,
+            extra: document.getElementById('chk-extra').checked,
+            mastery: document.getElementById('chk-mastery').checked,
+            resilience: document.getElementById('chk-resilience').checked
+        };
+
+        // Commit profile configurations directly into browser memory
+    if (activeCharacterId && charactersData[activeCharacterId]) {
+        charactersData[activeCharacterId].presets = presets;
+        localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+    }
+        speakText("saved " + presetNames[num]);
+    }
+
+    function loadPreset(num) {
+        // --- RULE 1: ESCAPE IF TAPPING AN EMPTY PRESET ---
+        if (!presets[num]) {
+            if (activePresetId !== null) {
+                escapePresetMode();
+            } else {
+                speakText(presetNames[num] + " is empty");
+            }
+            return;
+        }
+
+        // --- RULE 2: ESCAPE IF TAPPING THE CURRENTLY ACTIVE PRESET ---
+        if (activePresetId === num) {
+            escapePresetMode();
+            return;
+        }
+
+        // If entering a preset for the first time from manual mode, backup manual states
+        if (activePresetId === null) {
+            manualBackupState = {
+                diceCount: diceCount,
+                bonus: bonus,
+                critCount: critCount,
+                attackIndex: attackIndex,
+                prof: document.getElementById('chk-prof').checked,
+                extra: document.getElementById('chk-extra').checked,
+                mastery: document.getElementById('chk-mastery').checked,
+                resilience: document.getElementById('chk-resilience').checked
+            };
+        }
+
+        // Lock current preset slot tracker index
+        activePresetId = num;
+
+        // Execute normal slot allocation updates onto screen nodes
+        const data = presets[num];
+        diceCount = data.diceCount;
+        bonus = data.bonus;
+        critCount = data.critCount;
+        attackIndex = data.attackIndex;
+        
+        document.getElementById('rank-val').innerText = rank;
+        document.getElementById('dice-val').innerText = diceCount;
+        document.getElementById('bonus-val').innerText = bonus;
+        document.getElementById('crit-count-val').innerText = critCount;
+        
+        document.getElementById('chk-prof').checked = data.prof;
+        document.getElementById('chk-extra').checked = data.extra;
+        document.getElementById('chk-mastery').checked = data.mastery;
+        document.getElementById('chk-resilience').checked = data.resilience;
+        
+        updateAttackDisplay();
+        speakText("loaded " + presetNames[num]);
+    }
+
+    function renamePreset(num) {
+        window.speechSynthesis.cancel();
+        let currentName = presetNames[num];
+        let newName = prompt("Enter a custom name for this profile:", currentName);
+        if (newName !== null && newName.trim() !== "") {
+            presetNames[num] = newName.trim();
+            let displayId = (num === 10) ? 0 : num;
+            document.getElementById('p-slot-' + displayId).innerText = presetNames[num];
+            
+            // Commit structural label adjustments directly into browser memory
+    if (activeCharacterId && charactersData[activeCharacterId]) {
+        charactersData[activeCharacterId].presetNames = presetNames;
+        localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+    }
+            speakText("renamed to " + presetNames[num]);
+        }
+    }
+  
+      function clearPreset(num) {
+        // Verify if a profile slot configuration actually exists before attempting a wipe
+        if (!presets[num]) {
+            speakText(presetNames[num] + " is already empty");
+            return;
+        }
+
+        // Wipe the specific profile configuration block out of our operational memory structures
+        delete presets[num];
+        
+        if (activePresetId === num) {
+    activePresetId = null;
+    manualBackupState = null;
+}
+        
+        // Restore standard baseline template name labels
+        presetNames[num] = "Preset " + num;
+        
+        let displayId = (num === 10) ? 0 : num;
+        document.getElementById('p-slot-' + displayId).innerText = presetNames[num];
+
+        // Safely commit these structural slot updates straight to the active character profile dataset
+        if (activeCharacterId && charactersData[activeCharacterId]) {
+            charactersData[activeCharacterId].presets = presets;
+            charactersData[activeCharacterId].presetNames = presetNames;
+            localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+        }
+
+        speakText("cleared preset " + num);
+    }
+  
+      function escapePresetMode() {
+        if (!manualBackupState) {
+            speakText("already in manual mode");
+            return;
+        }
+
+        // Pull backup properties out of storage variables
+        const data = manualBackupState;
+        diceCount = data.diceCount;
+        bonus = data.bonus;
+        critCount = data.critCount;
+        attackIndex = data.attackIndex;
+
+        // Synchronize visual display text strings
+        document.getElementById('dice-val').innerText = diceCount;
+        document.getElementById('bonus-val').innerText = bonus;
+        document.getElementById('crit-count-val').innerText = critCount;
+        
+        document.getElementById('chk-prof').checked = data.prof;
+        document.getElementById('chk-extra').checked = data.extra;
+        document.getElementById('chk-mastery').checked = data.mastery;
+        document.getElementById('chk-resilience').checked = data.resilience;
+
+        // Clear preset operational tracking fields completely
+        activePresetId = null;
+        manualBackupState = null;
+
+        updateAttackDisplay();
+        speakText("returned to manual setup");
+    }
+  
     function toggleTTS() {
         ttsMode = (ttsMode + 1) % 3;
         const btn = document.getElementById('tts-toggle');
@@ -318,18 +762,54 @@
         window.speechSynthesis.speak(utterance);
     }
 
+    window.onload = function() {
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            const launchUtterance = new SpeechSynthesisUtterance("press space to begin");
+            launchUtterance.rate = 0.9;
+            window.speechSynthesis.speak(launchUtterance);
+        }
+    };
+  
     function initApp() {
         document.getElementById('start-overlay').style.display = 'none';
         appReady = true;
-        speakText(instructionsText);
-    }
 
-    function updateAttackDisplay() {
+        rebuildCharacterDropdown();
+
+        // Clear any leftover sessions so it always cold-boots cleanly into choice mode
+        activeCharacterId = "";
+        document.getElementById('char-dropdown').value = "";
+
+        document.getElementById('rolls-display').innerText = "System Ready.";
+        document.getElementById('counts-display').innerHTML = `
+            <div style="font-weight: bold; color: #007bff; font-size: 22px; text-align: center; margin-top: 10px; line-height: 1.4;">
+                The Crystal Sphere
+            </div>
+            <div style="font-size: 14px; color: #666; text-align: center; margin-top: 10px; line-height: 1.5;">
+                Load Character: <span style="font-weight:bold; color:#333">F1 - F4</span><br>
+                Audio Tutorial: <span style="font-weight:bold; color:#333">F5 - F12</span>
+            </div>
+        `;
+        
+        for (let num = 1; num <= 10; num++) {
+            let displayId = (num === 10) ? 0 : num;
+            document.getElementById('p-slot-' + displayId).innerText = "Preset " + num;
+        }
+
+        updateAttackDisplay(true); 
+        speakText(initialPromptText); // Prompt player to choose a file or listen to training
+    }
+  
+    function updateAttackDisplay(skipVoice = false) {
         const currentAttack = specialAttacks[attackIndex];
         document.getElementById('attack-val').innerText = currentAttack;
-        speakText(currentAttack);
+        
+        // --- ONLY VOICE ATTACK STATUS IF NOT DELIBERATELY SKIPPED ---
+        if (!skipVoice) {
+            speakText(currentAttack);
+        }
     }
-
     function toggleCheckbox(id, name) {
         const checkbox = document.getElementById(id);
         checkbox.checked = !checkbox.checked;
@@ -337,6 +817,48 @@
     }
 
     window.addEventListener('keydown', function(event) {
+      
+              // --- NEW: FUNCTION KEYS F5 THROUGH F12 TUTORIAL TRAILER MODULE ---
+        if (['F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(event.key)) {
+            event.preventDefault(); // Disables native browser developer tools or layout inspect panels
+            
+            // Extract the numerical string out of the function key identifier text
+            let stepNum = parseInt(event.key.replace('F', ''));
+            
+            // Fetch your custom placeholder sentence string directly out of the dictionary index
+            if (tutorialSteps[stepNum]) {
+                speakText(tutorialSteps[stepNum]);
+            }
+            return;
+        }
+      
+        // --- UPDATED PRESET HOOK CAPTURES FOR SAVING AND CLEARING CONFIGURATIONS ---
+        if (event.key >= '0' && event.key <= '9') {
+            event.preventDefault();
+            let pNum = (event.key === '0') ? 10 : parseInt(event.key);
+            
+            // --- NEW: IF CONTROL IS HELD DOWN, CLEAR THE TARGET PRESET INSTANTLY ---
+            if (event.ctrlKey) {
+                clearPreset(pNum);
+                return;
+            }
+
+            if (presetTimers[pNum]) return; // Block automatic OS repeat triggers
+            activePresetHolds[pNum] = false;
+
+            presetTimers[pNum] = setTimeout(() => {
+                activePresetHolds[pNum] = true;
+                savePreset(pNum);
+            }, 500); // 500ms Threshold to verify action state as a continuous Hold
+            return;
+        }
+      
+        if (event.key === 'CapsLock' || event.code === 'CapsLock') {
+            event.preventDefault(); // Prevents browser layout interruption hooks
+            saveActiveCharacter();   // Calls your native profile storage save script automatically
+            return;
+        }
+      
         if (event.code === 'Space' || event.key === ' ') {
             event.preventDefault();
             if (spacePressed) return; 
@@ -363,6 +885,8 @@
         if (event.key === 'c' || event.key === 'C') {
             event.preventDefault();
             if (critCount > 0) {
+              activePresetId = null;
+              manualBackupState = null;
                 critCount--;
                 document.getElementById('crit-count-val').innerText = critCount;
                 speakText("crit count " + critCount);
@@ -372,6 +896,8 @@
         if (event.key === 'v' || event.key === 'V') {
             event.preventDefault();
             if (critCount < 100) {
+                activePresetId = null;
+                manualBackupState = null;
                 critCount++;
                 document.getElementById('crit-count-val').innerText = critCount;
                 speakText("crit count " + critCount);
@@ -380,27 +906,81 @@
         }
 
         // --- CHECKBOX TOGGLE KEY SHORTCUTS ---
-        if (event.key === 'a' || event.key === '1' || event.code === 'Digit1' || event.code === 'Numpad1') {
+        if (event.key === 'a' || event.key === 'A' || event.code === 'KeyA' || event.code === 'Numpad1') {
             event.preventDefault();
+            activePresetId = null;
+            manualBackupState = null;
             toggleCheckbox('chk-prof', 'proficiency');
             return;
         }
-        if (event.key === 's' || event.key === '2' || event.code === 'Digit2' || event.code === 'Numpad2') {
+        if (event.key === 's' || event.key === 'S' || event.code === 'KeyS' || event.code === 'Numpad2') {
             event.preventDefault();
+            activePresetId = null;
+            manualBackupState = null;
             toggleCheckbox('chk-extra', 'extra training');
             return;
         }
-        if (event.key === 'd' || event.key === '3' || event.code === 'Digit3' || event.code === 'Numpad3') {
+        if (event.key === 'd' || event.key === 'D' || event.code === 'KeyD' || event.code === 'Numpad3') {
             event.preventDefault();
+            activePresetId = null;
+            manualBackupState = null;
             toggleCheckbox('chk-mastery', 'mastery');
             return;
         }
         // --- NEW: PRESS 4 TO TOGGLE RESILIENCE ---
-        if (event.key === 'f' || event.key === '4' || event.code === 'Digit4' || event.code === 'Numpad4') {
+        if (event.key === 'f' || event.key === 'F' || event.code === 'KeyF' || event.code === 'Numpad4') {
             event.preventDefault();
+            activePresetId = null;
+            manualBackupState = null;
             toggleCheckbox('chk-resilience', 'resilience');
             return;
         }
+      
+              // --- NEW: CHARACTER SELECT AND CREATION SLOTS F1, F2, F3, AND F4 ---
+        if (['F1', 'F2', 'F3', 'F4'].includes(event.key)) {
+            event.preventDefault(); // Blocks default system browser behavior (like opening help windows)
+            
+            // Map keys into 4 static slot identification indexes
+            let slotMapping = { 'F1': 1, 'F2': 2, 'F3': 3, 'F4': 4 };
+            let slotNum = slotMapping[event.key];
+            let targetId = "char_slot_f" + slotNum;
+
+            if (charactersData[targetId]) {
+                // If character data profile already exists in this key slot, load them instantly
+                loadCharacterSession(targetId, false);
+            } else {
+                // If slot is currently vacant, trigger custom profile initialization sequence
+                window.speechSynthesis.cancel();
+              
+               speakText("please name your character");
+              
+                let name = prompt("Character Slot F" + slotNum + " is vacant. Enter character name to create:");
+                if (name && name.trim() !== "") {
+                    name = name.trim();
+                    
+                    // Initialize empty character stats layout block
+                    charactersData[targetId] = {
+                        name: name,
+                        rank: 1, diceCount: 6, bonus: 0, critCount: 2, attackIndex: 0,
+                        prof: false, extra: false, mastery: false, resilience: false,
+                        presets: {},
+                        presetNames: {
+                            1:"Preset 1", 2:"Preset 2", 3:"Preset 3", 4:"Preset 4", 5:"Preset 5",
+                            6:"Preset 6", 7:"Preset 7", 8:"Preset 8", 9:"Preset 9", 10:"Preset 10"
+                        }
+                    };
+
+                    localStorage.setItem('cs_characters', JSON.stringify(charactersData));
+                    rebuildCharacterDropdown();
+                    loadCharacterSession(targetId, false);
+                } else {
+                    // Re-dispatch prompt track if user clicked cancel or left string blank
+                    speakText(initialPromptText);
+                }
+            }
+            return;
+        }
+      
         // --- NEW: PRESS G TO ROTATE SPEECH OUTPUT MODES ---
         if (event.key === 'g' || event.key === 'G' || event.code === 'KeyG') {
             event.preventDefault();
@@ -418,26 +998,16 @@
         // CTRL + LEFT / RIGHT COMMAND HANDLING
         if (event.ctrlKey && event.key === 'ArrowLeft') {
             event.preventDefault();
+            activePresetId = null;
+            manualBackupState = null;
             attackIndex = (attackIndex - 1 + specialAttacks.length) % specialAttacks.length;
             updateAttackDisplay();
             return;
         }
         if (event.ctrlKey && event.key === 'ArrowRight') {
             event.preventDefault();
-            attackIndex = (attackIndex + 1) % specialAttacks.length;
-            updateAttackDisplay();
-            return;
-        }
-
-        // LEFT BRACKET / RIGHT BRACKET HANDLING
-        if (event.key === '[' || event.code === 'BracketLeft') {
-            event.preventDefault();
-            attackIndex = (attackIndex - 1 + specialAttacks.length) % specialAttacks.length;
-            updateAttackDisplay();
-            return;
-        }
-        if (event.key === ']' || event.code === 'BracketRight') {
-            event.preventDefault();
+            activePresetId = null;
+            manualBackupState = null;
             attackIndex = (attackIndex + 1) % specialAttacks.length;
             updateAttackDisplay();
             return;
@@ -467,6 +1037,8 @@
         if (event.key === 'ArrowLeft' && !event.ctrlKey) {
             event.preventDefault();
             if (bonus > 0) {
+                activePresetId = null;
+                manualBackupState = null;
                 bonus--;
                 document.getElementById('bonus-val').innerText = bonus;
                 speakText("plus " + bonus);
@@ -475,7 +1047,9 @@
         } 
         if (event.key === 'ArrowRight' && !event.ctrlKey) {
             event.preventDefault();
-            if (bonus < 100) { 
+            if (bonus < 100) {
+                activePresetId = null;
+                manualBackupState = null;
                 bonus++;
                 document.getElementById('bonus-val').innerText = bonus;
                 speakText("plus " + bonus);
@@ -486,7 +1060,9 @@
         // UP/DOWN ARROWS CONTROL DICE (EXCLUDES MODIFIERS SAFELY)
         if (event.key === 'ArrowUp' && !event.ctrlKey) {
             event.preventDefault();
-            if (diceCount < 12) { 
+            if (diceCount < 12) {
+                activePresetId = null;
+                manualBackupState = null;
                 diceCount++;
                 document.getElementById('dice-val').innerText = diceCount;
                 speakText(diceCount + " dice");
@@ -496,6 +1072,8 @@
         if (event.key === 'ArrowDown' && !event.ctrlKey) {
             event.preventDefault();
             if (diceCount > 1) {
+                activePresetId = null;
+                manualBackupState = null;
                 diceCount--;
                 document.getElementById('dice-val').innerText = diceCount;
                 speakText(diceCount + " dice");
@@ -505,6 +1083,23 @@
     });
 
     window.addEventListener('keyup', function(event) {
+      
+              // --- UPDATED PRESET HOOK DISPATCH OPERATIONS FOR NUMBER KEYS ---
+        if (event.key >= '0' && event.key <= '9') {
+            event.preventDefault();
+            let pNum = (event.key === '0') ? 10 : parseInt(event.key);
+            
+            clearTimeout(presetTimers[pNum]);
+            delete presetTimers[pNum];
+
+            // Only fire load matrix calculation paths if key wasn't held down for 500ms
+            if (!activePresetHolds[pNum]) {
+                loadPreset(pNum);
+            }
+            delete activePresetHolds[pNum];
+            return;
+        }
+      
         if (event.code === 'Space' || event.key === ' ') {
             event.preventDefault();
             clearTimeout(spaceTimer);
