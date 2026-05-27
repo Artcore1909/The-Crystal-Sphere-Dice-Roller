@@ -905,21 +905,21 @@
         }
 
         // --- CHECKBOX TOGGLE KEY SHORTCUTS ---
-        if (event.key === 'a' || event.key === 'A' || event.code === 'KeyA' || event.code === 'Numpad1') {
+        if (event.key === 'a' || event.key === 'A' || event.code === 'KeyA') {
             event.preventDefault();
             activePresetId = null;
             manualBackupState = null;
             toggleCheckbox('chk-prof', 'proficiency');
             return;
         }
-        if (event.key === 's' || event.key === 'S' || event.code === 'KeyS' || event.code === 'Numpad2') {
+        if (event.key === 's' || event.key === 'S' || event.code === 'KeyS') {
             event.preventDefault();
             activePresetId = null;
             manualBackupState = null;
             toggleCheckbox('chk-extra', 'extra training');
             return;
         }
-        if (event.key === 'd' || event.key === 'D' || event.code === 'KeyD' || event.code === 'Numpad3') {
+        if (event.key === 'd' || event.key === 'D' || event.code === 'KeyD') {
             event.preventDefault();
             activePresetId = null;
             manualBackupState = null;
@@ -927,7 +927,7 @@
             return;
         }
         // --- NEW: PRESS 4 TO TOGGLE RESILIENCE ---
-        if (event.key === 'f' || event.key === 'F' || event.code === 'KeyF' || event.code === 'Numpad4') {
+        if (event.key === 'f' || event.key === 'F' || event.code === 'KeyF') {
             event.preventDefault();
             activePresetId = null;
             manualBackupState = null;
