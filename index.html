@@ -1,7 +1,7 @@
-​<html lang="en">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Random Word Reader</title>
+    <title>Crystal Sphere Dice Roller</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -358,7 +358,7 @@
         7:  "press control left or control right to choose the type of roll",
         8:  "Press a, s, d, or f to toggle proficiency, extra training, mastery, and resilience",
         9:  "Press c or v to set your crit count",
-        10: "Hold 0 through 9 to save presets, and Press 0 through 9 to load presets. To clear a preset, press control plus the desired number.",
+        10: "Hold 0 through 9 to save presets, and Press 0 through 9 to load presets or Tab to cycle through them. To clear a preset, press control plus the desired number.",
         11: "press Control up or control down to set your rank",
         12: "Press g to control speech setting, and Press H to toggle auto calculations."
     };
@@ -817,7 +817,21 @@
 
     window.addEventListener('keydown', function(event) {
       
-              // --- NEW: FUNCTION KEYS F5 THROUGH F12 TUTORIAL TRAILER MODULE ---
+          // --- NEW: TAB KEY CYCLES FORWARD THROUGH SAVED PRESETS ---
+        if (event.key === 'Tab' || event.code === 'Tab') {
+            event.preventDefault(); // Blocks browser focus indicator box shifting anomalies
+            
+            // Loop calculation range tracker logic
+            let nextPreset = 1;
+            if (activePresetId !== null) {
+                nextPreset = (activePresetId % 10) + 1;
+            }
+            
+            loadPreset(nextPreset);
+            return;
+        }
+      
+      // --- NEW: FUNCTION KEYS F5 THROUGH F12 TUTORIAL TRAILER MODULE ---
         if (['F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(event.key)) {
             event.preventDefault(); // Disables native browser developer tools or layout inspect panels
             
@@ -1344,6 +1358,7 @@
 
         document.getElementById('rolls-display').innerText = "Rolls: " + chosenWords.join(', ');
 
+        // --- FIXED UI DISPLAY: REMOVED SUBTOTAL, SHOWS ONLY TOTAL ---
         document.getElementById('counts-display').innerHTML = `
             <div class="count-item">Crits: ${counts['Crit']}</div>
             <div class="count-item">Hits: ${counts['Hit']}</div>
@@ -1351,28 +1366,29 @@
             <div class="count-item">Weirds: ${counts['Weird']}</div>
             <div class="count-item">Blanks: ${counts['Blank']}</div>
             <div class="total-display">
-                <div>Subtotal: ${totalAmount}</div>
                 <div>Total: ${damageAmount}</div>
             </div>
         `;
 
-        // --- DYNAMIC AUDIO PHRASING ENGINE ---
+        // --- FIXED AUDIO ENGINE: PHRASING REMOVES SUBTOTAL READOUT ---
         let resultSummary = "";
 
         if (ttsMode === 1) {
-            resultSummary = `${totalAmount} ${ttsHitPhrasing}., and a total of ${damageAmount}`;
+            // Quick Talk Mode
+            resultSummary = `${damageAmount} ${ttsHitPhrasing}`;
         } else {
-            resultSummary =  
+            // Standard Full Mode
+            resultSummary = 
                 `${counts['Crit']} ${counts['Crit'] === 1 ? 'crit' : 'crits'}, ` +
                 `${counts['Hit']} ${counts['Hit'] === 1 ? 'hit' : 'hits'}, ` +
                 `${counts['Skill']} ${counts['Skill'] === 1 ? 'skill' : 'skills'}, ` +
                 `${counts['Weird']} ${counts['Weird'] === 1 ? 'weird' : 'weirds'}, ` +
                 `${counts['Blank']} ${counts['Blank'] === 1 ? 'blank' : 'blanks'}, ` +
-                `for a subtotal of ${totalAmount} ${ttsHitPhrasing}., and a total of ${damageAmount}`;
+                `for a total of ${damageAmount} ${ttsHitPhrasing}`;
         }
 
         speakText(resultSummary);
-    }
+    } // Closes executePipeline / rollDice processing structure securely
 
 
 </script>
